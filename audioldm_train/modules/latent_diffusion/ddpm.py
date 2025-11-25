@@ -1954,7 +1954,22 @@ class LatentDiffusion(DDPM):
 
                 self.save_waveform(waveform, waveform_save_path, name=fnames)
         return waveform_save_path
+    
+    def save_lora(self, path):
+        """Save only LoRA weights"""
+        lora_state = {k: v for k, v in self.state_dict().items() if "lora" in k.lower()}
+        if len(lora_state) == 0:
+            raise ValueError("No LoRA parameters found to save!")
+        torch.save(lora_state, path)
+        print(f"[LoRA saved] {len(lora_state)} tensors -> {path}")
 
+    def load_lora(self, path):
+        """Load LoRA weights into model"""
+        ckpt = torch.load(path, map_location="cpu")
+        missing, unexpected = self.load_state_dict(ckpt, strict=False)
+        print(f"[LoRA loaded] from {path}")
+        print("Missing keys:", missing)
+        print("Unexpected keys:", unexpected)
 
 class DiffusionWrapper(pl.LightningModule):
     def __init__(self, diff_model_config, conditioning_key):

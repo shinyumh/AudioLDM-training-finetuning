@@ -6,6 +6,7 @@ from torch import nn, einsum
 from einops import rearrange, repeat
 
 from audioldm_train.utilities.diffusion_util import checkpoint
+from audioldm_train.modules.lora import LoRALinear
 
 
 def exists(val):
@@ -332,9 +333,14 @@ class CrossAttention(nn.Module):
         self.scale = dim_head**-0.5
         self.heads = heads
 
-        self.to_q = nn.Linear(query_dim, inner_dim, bias=False)
-        self.to_k = nn.Linear(context_dim, inner_dim, bias=False)
-        self.to_v = nn.Linear(context_dim, inner_dim, bias=False)
+        # self.to_q = nn.Linear(query_dim, inner_dim, bias=False)
+        # self.to_k = nn.Linear(context_dim, inner_dim, bias=False)
+        # self.to_v = nn.Linear(context_dim, inner_dim, bias=False)
+
+        # changed the linear layers to lora layers instead
+        self.to_q = LoRALinear(nn.Linear(query_dim, inner_dim, bias=False))
+        self.to_k = LoRALinear(nn.Linear(context_dim, inner_dim, bias=False))
+        self.to_v = LoRALinear(nn.Linear(context_dim, inner_dim, bias=False))
 
         self.to_out = nn.Sequential(
             nn.Linear(inner_dim, query_dim), nn.Dropout(dropout)

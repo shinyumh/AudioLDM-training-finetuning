@@ -140,6 +140,19 @@ def main(configs, config_yaml_path, exp_group_name, exp_name, perform_validation
     latent_diffusion = instantiate_from_config(configs["model"])
     latent_diffusion.set_log_dir(log_path, exp_group_name, exp_name)
 
+    # freeze all the non lora parameters
+    for name, param in latent_diffusion.named_parameters():
+        # train only LoRA parameters
+        if "lora" not in name.lower():
+            param.requires_grad = False
+        else:
+            print("[LoRA Trainable]", name)
+
+    # print how many params are trainable
+    trainable = sum(p.numel() for p in latent_diffusion.parameters() if p.requires_grad)
+    total = sum(p.numel() for p in latent_diffusion.parameters())
+    print(f"Trainable parameters (LoRA only): {trainable}/{total} ({100*trainable/total:.4f}%)")
+
     wandb_logger = WandbLogger(
         save_dir=wandb_path,
         project=configs["project"],
@@ -203,6 +216,10 @@ def main(configs, config_yaml_path, exp_group_name, exp_name, perform_validation
             latent_diffusion, loader, val_loader, ckpt_path=resume_from_checkpoint
         )
 
+    # after training finishes, save LoRA weights only
+    save_path = os.path.join(checkpoint_path, "lora_only.pt")
+    latent_diffusion.save_lora(save_path)
+    print(f"[LoRA Saved] -> {save_path}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

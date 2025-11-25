@@ -97,12 +97,19 @@ class CLAP2AudioMAE(pl.LightningModule):
 
     def configure_optimizers(self):
         lr = float(self.learning_rate)
-        params = list(self.model.parameters()) + list(self.linear_clap.parameters())
 
-        if self.use_audiomae_linear:
-            params += list(self.linear_audiomae.parameters())
+        # params = list(self.model.parameters()) + list(self.linear_clap.parameters())
 
-        opt = torch.optim.AdamW(params, lr=lr)
+        # if self.use_audiomae_linear:
+        #     params += list(self.linear_audiomae.parameters())
+
+        # collect only LoRA parameters (they remain requires_grad=True)
+        lora_params = [p for n, p in self.named_parameters() if p.requires_grad]
+
+        if len(lora_params) == 0:
+            raise ValueError("No LoRA parameters found!")
+
+        opt = torch.optim.AdamW(lora_params, lr=lr)
         scheduler = lr_scheduler.StepLR(opt, step_size=1, gamma=0.9)
         return [opt], [scheduler]
 
