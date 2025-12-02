@@ -1,0 +1,61 @@
+name: audioldm
+channels:
+  - conda-forge
+  - defaults
+
+dependencies:
+  - python=3.10
+  - pip
+  - numpy
+  - scipy
+  - libsndfile
+  - ffmpeg
+  - yaml
+  - pytz
+  - pandas
+  - cffi
+  - openssl
+  - ca-certificates
+
+  - pip:
+      # Core ML stack
+      - torch==2.1.0
+      - torchvision==0.16.0
+      - torchaudio==2.1.0
+
+      # AudioLDM deps
+      - librosa==0.11.0
+      - einops==0.8.1
+      - omegaconf==2.3.0
+      - soundfile==0.12.1
+      - soxr==0.3.6
+      - torchmetrics==1.2.1
+      - pytorch-lightning==1.9.5
+      - transformers==4.33.2
+      - tokenizers==0.13.3
+      - timm==0.6.7
+      - ftfy==6.3.1
+      - huggingface-hub==0.16.4
+      - safetensors==0.4.1
+
+      # Missing deps you hit errors for
+      - h5py
+      - torchlibrosa
+      - wget
+
+      # Web, utils
+      - tqdm
+      - requests
+      - regex
+      - yarl
+      - aiohttp
+      - braceexpand
+      - gitpython
+      - webdataset
+      - wandb
+
+      # Scientific python
+      - scikit-learn
+      - numba==0.58.1
+      - llvmlite==0.41.1
+
