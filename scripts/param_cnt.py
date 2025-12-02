@@ -1,15 +1,22 @@
 import os, sys, torch
 from omegaconf import OmegaConf
 import torch.nn as nn
+import types
 
-# ---------------- PATH SETUP ----------------
-repo_root = "/Users/melodyhu/Desktop/genai/AudioLDM-training-finetuning"
+# ============================================================
+#  AUTO-DETECT REPOSITORY ROOT (works on ANY EC2 instance)
+# ============================================================
+# Assumes you run the script from inside the repo or any subfolder
+repo_root = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..")  # go one level up
+)
+
+print("Detected repo root:", repo_root)
 sys.path.append(repo_root)
 
 # ============================================================
 #  FIX 1 — Fake taming package so imports don't break
 # ============================================================
-import types
 fake_taming = types.ModuleType("taming")
 fake_taming.modules = types.ModuleType("taming.modules")
 fake_taming.modules.losses = types.ModuleType("taming.modules.losses")
@@ -50,15 +57,13 @@ class DummyVAELoss(nn.Module):
 losses.LPIPSWithDiscriminator = DummyVAELoss
 
 # ============================================================
-#  NOW import instantiate_from_config
+#  LOAD CONFIG (Auto-adjusted path)
 # ============================================================
-from audioldm_train.utilities.model_util import instantiate_from_config
-
-# ---------------- LOAD CONFIG ----------------
 config_path = os.path.join(
     repo_root,
     "audioldm_train/config/2023_08_23_reproduce_audioldm/audioldm_original.yaml",
 )
+
 print("Loading config:", config_path)
 config = OmegaConf.load(config_path)
 
@@ -74,7 +79,7 @@ try:
         and "params" in cfg["first_stage_config"]
         and "reload_from_ckpt" in cfg["first_stage_config"]["params"]
     ):
-        cfg["first_stage_config"]["params"]["reload_from_ckpt"] = ""
+        cfg["first_stage_config"]["params"]["reload_from_ckpt"] = None
         print("[INFO] Disabled VAE checkpoint loading")
 
     # Disable DDPM checkpoint (main model)
@@ -85,16 +90,24 @@ try:
 except Exception as e:
     print("[WARN] Could not modify checkpoint paths:", e)
 
-# ---------------- INSTANTIATE MODEL ----------------
+# ============================================================
+#  INSTANTIATE MODEL
+# ============================================================
+from audioldm_train.utilities.model_util import instantiate_from_config
+
 print("Instantiating LatentDiffusion with dummy CLAP (CPU-safe)…")
 model = instantiate_from_config(config["model"])
 
-# ---------------- APPLY LORA FREEZING ----------------
+# ============================================================
+#  APPLY LoRA FREEZING
+# ============================================================
 for name, param in model.named_parameters():
     if "lora" not in name.lower():
         param.requires_grad = False
 
-# ---------------- COUNT PARAMETERS ----------------
+# ============================================================
+#  PARAMETER SUMMARY
+# ============================================================
 total = sum(p.numel() for p in model.parameters())
 trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
 
