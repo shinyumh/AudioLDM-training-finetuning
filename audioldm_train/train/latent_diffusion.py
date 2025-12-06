@@ -140,6 +140,9 @@ def main(configs, config_yaml_path, exp_group_name, exp_name, perform_validation
     latent_diffusion = instantiate_from_config(configs["model"])
     latent_diffusion.set_log_dir(log_path, exp_group_name, exp_name)
 
+    # disable EMA
+    latent_diffusion.use_ema = False
+
     # freeze all the non lora parameters
     for name, param in latent_diffusion.named_parameters():
         # train only LoRA parameters
