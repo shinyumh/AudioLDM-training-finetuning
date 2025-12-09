@@ -141,24 +141,32 @@ def main(configs, config_yaml_path, exp_group_name, exp_name, perform_validation
     latent_diffusion = instantiate_from_config(configs["model"])
     latent_diffusion.set_log_dir(log_path, exp_group_name, exp_name)
 
-        # freeze all the non lora parameters
+    #     # freeze all the non lora parameters
+    # for name, param in latent_diffusion.named_parameters():
+    #     # train only LoRA parameters
+    #     if "lora" not in name.lower():
+    #         param.requires_grad = False
+    #     else:
+    #         print("[LoRA Trainable]", name)
+    
+    # Freeze everything *except* LoRA *and* the base weights they wrap
     for name, param in latent_diffusion.named_parameters():
-        # train only LoRA parameters
-        if "lora" not in name.lower():
+        if "lora" in name.lower() or "to_q.base" in name or "to_k.base" in name or "to_v.base" in name:
+            param.requires_grad = True
+            print("[Trainable]", name)
+        else:
             param.requires_grad = False
-        else:
-            print("[LoRA Trainable]", name)
 
 
-    print("\n=== Checking LoRA parameters ===")
-    lora_count = 0
-    for n, p in latent_diffusion.named_parameters():
-        if "lora" in n.lower():
-            print(n, "requires_grad =", p.requires_grad)
-            lora_count += 1
-        else:
-            p.requires_grad = False
-    print("Total LoRA params found:", lora_count)
+    # print("\n=== Checking LoRA parameters ===")
+    # lora_count = 0
+    # for n, p in latent_diffusion.named_parameters():
+    #     if "lora" in n.lower():
+    #         print(n, "requires_grad =", p.requires_grad)
+    #         lora_count += 1
+    #     else:
+    #         p.requires_grad = False
+    # print("Total LoRA params found:", lora_count)
     total_trainable = sum(p.numel() for p in latent_diffusion.parameters() if p.requires_grad)
     total_params = sum(p.numel() for p in latent_diffusion.parameters())
     print(f"Trainable params: {total_trainable}/{total_params}")
@@ -316,10 +324,20 @@ def main(configs, config_yaml_path, exp_group_name, exp_name, perform_validation
         #     trainer.validate(latent_diffusion, val_loader)
 
         trainer.fit(latent_diffusion, loader, val_loader)
+    # else:
+    #     trainer.fit(
+    #         latent_diffusion, loader, val_loader, ckpt_path=resume_from_checkpoint
+    #     )
+
     else:
-        trainer.fit(
-            latent_diffusion, loader, val_loader, ckpt_path=resume_from_checkpoint
-        )
+    # For LoRA finetuning, treat base checkpoint like "external" weights.
+    # Do NOT resume optimizer state from old runs.
+        if resume_from_checkpoint is not None:
+            ckpt = torch.load(resume_from_checkpoint)["state_dict"]
+            # (optionally apply same remapping logic here as in is_external_checkpoints)
+            latent_diffusion.load_state_dict(ckpt, strict=False)
+
+        trainer.fit(latent_diffusion, loader, val_loader)
 
     # after training finishes, save LoRA weights only
     save_path = os.path.join(checkpoint_path, "lora_only.pt")
