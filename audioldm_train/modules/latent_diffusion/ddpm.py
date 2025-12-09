@@ -886,13 +886,22 @@ class DDPM(pl.LightningModule):
                 return {key: log[key] for key in return_keys}
         return log
 
+    # def configure_optimizers(self):
+    #     lr = self.learning_rate
+    #     params = list(self.model.parameters())
+    #     if self.learn_logvar:
+    #         params = params + [self.logvar]
+    #     opt = torch.optim.AdamW(params, lr=lr)
+    #     return opt
+
     def configure_optimizers(self):
-        lr = self.learning_rate
-        params = list(self.model.parameters())
-        if self.learn_logvar:
-            params = params + [self.logvar]
-        opt = torch.optim.AdamW(params, lr=lr)
-        return opt
+        lora_params = [p for n, p in self.named_parameters() if p.requires_grad]
+
+        if len(lora_params) == 0:
+            raise ValueError("No LoRA parameters found! Check naming or freezing logic.")
+
+        optimizer = torch.optim.AdamW(lora_params, lr=self.learning_rate)
+        return optimizer
 
     def initialize_param_check_toolkit(self):
         self.tracked_steps = 0

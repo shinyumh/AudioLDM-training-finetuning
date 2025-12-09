@@ -23,9 +23,9 @@ data:
 
 step:
   validation_every_n_epochs: 5
-  save_checkpoint_every_n_steps: 5000
+  save_checkpoint_every_n_steps: 2000
   # limit_val_batches: 2
-  max_steps: 800000
+  max_steps: 2000
   save_top_k: 1
 
 preprocessing:
@@ -86,7 +86,7 @@ model:
           dropout: 0.0
     
     # Other parameters
-    base_learning_rate: 1.0e-4
+    base_learning_rate: 2.0e-4
     warmup_steps: *warmup_steps
     optimize_ddpm_parameter: *optimize_ddpm_parameter
     sampling_rate: *sampling_rate
