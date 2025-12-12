@@ -894,14 +894,58 @@ class DDPM(pl.LightningModule):
     #     opt = torch.optim.AdamW(params, lr=lr)
     #     return opt
 
+    # def configure_optimizers(self):
+    #     lora_params = [p for n, p in self.named_parameters() if p.requires_grad]
+
+    #     if len(lora_params) == 0:
+    #         raise ValueError("No LoRA parameters found! Check naming or freezing logic.")
+        
+    #     #print(f"DEBUG: Optimizer is tracking {lora_params} trainable parameters.")
+    #     optimizer = torch.optim.AdamW(lora_params, lr=self.learning_rate)
+    #     return optimizer
+
+    # def configure_optimizers(self):
+    #     lr = self.learning_rate
+    #     # 1. Fix: Correctly handle the default fallback
+    #     if lr is None:
+    #         print("WARNING: Learning rate is None! Defaulting to 1e-4")
+    #         lr = 1e-4
+        
+    #     # 2. Fix: Collect params
+    #     lora_params = [p for n, p in self.named_parameters() if p.requires_grad]
+
+    #     if len(lora_params) == 0:
+    #         raise ValueError("No LoRA parameters found! Check naming or freezing logic.")
+
+    #     # 3. Fix: Print COUNT, not the tensor values
+    #     total_trainable = sum(p.numel() for p in lora_params)
+    #     print(f"DEBUG: Optimizer is tracking {len(lora_params)} tensors with {total_trainable} total parameters.")
+        
+    #     # 4. Fix: Use the sanitized 'lr' variable
+    #     optimizer = torch.optim.AdamW(lora_params, lr=lr)
+
+    #     return optimizer
+
     def configure_optimizers(self):
-        lora_params = [p for n, p in self.named_parameters() if p.requires_grad]
+        lora_params = []
+        base_params = []
+        for name, p in self.named_parameters():
+            if not p.requires_grad:
+                continue
+            if "lora" in name.lower():
+                lora_params.append(p)
+            else:
+                base_params.append(p)
 
-        if len(lora_params) == 0:
-            raise ValueError("No LoRA parameters found! Check naming or freezing logic.")
+        opt = torch.optim.AdamW(
+            [
+                {"params": base_params, "lr": self.learning_rate},
+                {"params": lora_params, "lr": self.learning_rate * 10.0},  # boost LoRA
+            ]
+        )
 
-        optimizer = torch.optim.AdamW(lora_params, lr=self.learning_rate)
-        return optimizer
+        return opt
+
 
     def initialize_param_check_toolkit(self):
         self.tracked_steps = 0
@@ -1052,33 +1096,97 @@ class LatentDiffusion(DDPM):
             self.init_from_ckpt(ckpt_path, ignore_keys)
             self.restarted_from_ckpt = True
 
+    # def configure_optimizers(self):
+    #     lr = self.learning_rate
+    #     params = list(self.model.parameters())
+
+    #     for each in self.cond_stage_models:
+    #         params = params + list(
+    #             each.parameters()
+    #         )  # Add the parameter from the conditional stage
+
+    #     if self.learn_logvar:
+    #         print("Diffusion model optimizing logvar")
+    #         params.append(self.logvar)
+    #     opt = torch.optim.AdamW(params, lr=lr)
+    #     # if self.use_scheduler:
+    #     #     assert "target" in self.scheduler_config
+    #     #     scheduler = instantiate_from_config(self.scheduler_config)
+
+    #     #     print("Setting up LambdaLR scheduler...")
+    #     #     scheduler = [
+    #     #         {
+    #     #             "scheduler": LambdaLR(opt, lr_lambda=scheduler.schedule),
+    #     #             "interval": "step",
+    #     #             "frequency": 1,
+    #     #         }
+    #     #     ]
+    #     #     return [opt], scheduler
+    #     return opt
+
+    # def configure_optimizers(self):
+    #     lr = self.learning_rate
+    #     if lr is None:
+    #         print("[LoRA OPT] WARNING: self.learning_rate is None, defaulting to 1e-4")
+    #         lr = 1e-4
+
+    #     # Collect ONLY trainable parameters (LoRA + anything else you explicitly left trainable)
+    #     trainable_params = []
+    #     trainable_names = []
+
+    #     for name, param in self.named_parameters():
+    #         if param.requires_grad:
+    #             trainable_params.append(param)
+    #             trainable_names.append(name)
+
+    #     if len(trainable_params) == 0:
+    #         raise ValueError(
+    #             "[LoRA OPT] No trainable parameters found in LatentDiffusion!\n"
+    #             "Check that your LoRA layers have requires_grad=True and that the "
+    #             "base model / CLAP / VAE are frozen correctly."
+    #         )
+
+    #     # Optional: sanity check that we are really seeing LoRA params
+    #     lora_like = [n for n in trainable_names if "lora" in n.lower()]
+    #     print(f"[LoRA OPT] {len(trainable_params)} tensors will be optimized "
+    #           f"({sum(p.numel() for p in trainable_params)} scalar params total).")
+    #     if len(lora_like) == 0:
+    #         print("[LoRA OPT] WARNING: no parameter names contain 'lora'. "
+    #               "Make sure this is expected (e.g., if you're also fine-tuning non-LoRA layers).")
+    #     else:
+    #         print("[LoRA OPT] Example LoRA params:")
+    #         for n in lora_like[:8]:  # print a few for sanity
+    #             print("    ", n)
+
+    #     optimizer = torch.optim.AdamW(trainable_params, lr=lr)
+
+    #     # If you later want to re-enable the scheduler, you can still wrap this optimizer here.
+    #     return optimizer
+
     def configure_optimizers(self):
-        lr = self.learning_rate
-        params = list(self.model.parameters())
+        opt = torch.optim.AdamW(
+            [p for p in self.parameters() if p.requires_grad],
+            lr=self.learning_rate
+        )
 
-        for each in self.cond_stage_models:
-            params = params + list(
-                each.parameters()
-            )  # Add the parameter from the conditional stage
+        # DEBUG: check that LoRA params are in optimizer
+        lora_names = [n for n, p in self.named_parameters() if "lora_" in n]
+        print("\n=== LoRA PARAMS PRESENT IN MODEL ===")
+        for n in lora_names:
+            print(" ", n)
+        print("====================================")
 
-        if self.learn_logvar:
-            print("Diffusion model optimizing logvar")
-            params.append(self.logvar)
-        opt = torch.optim.AdamW(params, lr=lr)
-        # if self.use_scheduler:
-        #     assert "target" in self.scheduler_config
-        #     scheduler = instantiate_from_config(self.scheduler_config)
+        opt_param_ids = {id(p) for g in opt.param_groups for p in g['params']}
+        missing = [n for n, p in self.named_parameters()
+                if "lora_" in n and id(p) not in opt_param_ids]
 
-        #     print("Setting up LambdaLR scheduler...")
-        #     scheduler = [
-        #         {
-        #             "scheduler": LambdaLR(opt, lr_lambda=scheduler.schedule),
-        #             "interval": "step",
-        #             "frequency": 1,
-        #         }
-        #     ]
-        #     return [opt], scheduler
+        if missing:
+            print("!!! LoRA params NOT in optimizer:", missing)
+        else:
+            print("All LoRA params are in the optimizer.")
+
         return opt
+
 
     def make_cond_schedule(
         self,

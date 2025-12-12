@@ -141,22 +141,26 @@ def main(configs, config_yaml_path, exp_group_name, exp_name, perform_validation
     latent_diffusion = instantiate_from_config(configs["model"])
     latent_diffusion.set_log_dir(log_path, exp_group_name, exp_name)
 
-    #     # freeze all the non lora parameters
-    # for name, param in latent_diffusion.named_parameters():
-    #     # train only LoRA parameters
-    #     if "lora" not in name.lower():
-    #         param.requires_grad = False
-    #     else:
-    #         print("[LoRA Trainable]", name)
-    
-    # Freeze everything *except* LoRA *and* the base weights they wrap
-    for name, param in latent_diffusion.named_parameters():
-        if "lora" in name.lower() or "to_q.base" in name or "to_k.base" in name or "to_v.base" in name:
-            param.requires_grad = True
-            print("[Trainable]", name)
-        else:
-            param.requires_grad = False
+        # ---------------------------------------------------------
+    # DEBUG: Check that LoRALinear layers are actually in model
+    # ---------------------------------------------------------
+    try:
+        print("\n=== Checking Attention Q/K/V Types ===")
+        block = latent_diffusion.model.diffusion_model.middle_block[1].transformer_blocks[0].attn1
+        print("Q:", type(block.to_q))
+        print("K:", type(block.to_k))
+        print("V:", type(block.to_v))
+        print("======================================\n")
+    except Exception as e:
+        print("Could not inspect attention block:", e)
 
+    # freeze all the non lora parameters
+    for name, param in latent_diffusion.named_parameters():
+        # train only LoRA parameters
+        if "lora" not in name.lower():
+            param.requires_grad = False
+        else:
+            print("[LoRA Trainable]", name)
 
     # print("\n=== Checking LoRA parameters ===")
     # lora_count = 0
@@ -216,6 +220,7 @@ def main(configs, config_yaml_path, exp_group_name, exp_name, perform_validation
         limit_val_batches=limit_val_batches,
         check_val_every_n_epoch=validation_every_n_epochs,
         strategy=DDPStrategy(find_unused_parameters=False),
+        #callbacks=[checkpoint_callback, LoRA_GradMonitor(), LoRA_WeightDiffMonitor()],
         callbacks=[checkpoint_callback, LoRA_GradMonitor()],
     )
 
@@ -366,8 +371,8 @@ def print_lora_weight_stats(model):
     for name, param in model.named_parameters():
         if "lora" in name.lower():
             print(
-                f"{name}: mean={param.data.mean().item():.6f}, "
-                f"std={param.data.std().item():.6f}"
+                f"{name}: mean={param.data.mean().item():.9f}, "
+                f"std={param.data.std().item():.9f}"
             )
     print("=========================\n")
 
@@ -389,6 +394,22 @@ class LoRA_GradMonitor(Callback):
             print_lora_weight_stats(pl_module)
         self.batches_this_epoch += 1
 
+# class LoRA_WeightDiffMonitor(Callback):
+#     def __init__(self):
+#         super().__init__()
+#         self.prev = {}
+
+#     def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
+#         print("\n=== LoRA Weight Δ (per batch) ===")
+#         with torch.no_grad():
+#             for name, p in pl_module.named_parameters():
+#                 if "lora" in name.lower():
+#                     cur = p.detach().cpu()
+#                     if name in self.prev:
+#                         diff = (cur - self.prev[name]).abs().max().item()
+#                         print(f"{name}: max |Δw| = {diff:.2e}")
+#                     self.prev[name] = cur.clone()
+#         print("=================================\n")
 
 
 if __name__ == "__main__":

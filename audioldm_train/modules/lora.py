@@ -27,7 +27,8 @@ class LoRALinear(nn.Module):
         self.lora_B = nn.Linear(r, out_dim, bias=False)
 
         nn.init.kaiming_uniform_(self.lora_A.weight, a=math.sqrt(5))
-        nn.init.zeros_(self.lora_B.weight)
+        #nn.init.zeros_(self.lora_B.weight)
+        nn.init.normal_(self.lora_B.weight, mean=0.0, std=0.01)
 
         # optional dropout for better generalization in audio data
         self.dropout = nn.Dropout(dropout) if dropout > 0 else nn.Identity()
