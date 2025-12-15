@@ -77,8 +77,21 @@ def infer(dataset_json, configs, config_yaml_path, exp_group_name, exp_name):
         "n_candidates_per_samples"
     ]
 
+    # checkpoint = torch.load(resume_from_checkpoint)
+    # latent_diffusion.load_state_dict(checkpoint["state_dict"])
+
+    # load base checkpoint
     checkpoint = torch.load(resume_from_checkpoint)
-    latent_diffusion.load_state_dict(checkpoint["state_dict"])
+    latent_diffusion.load_state_dict(checkpoint["state_dict"], strict=False)
+
+    # load LoRA checkpoint if it exists
+    lora_path = os.path.join(checkpoint_path, "lora_only.pt")
+    if os.path.exists(lora_path):
+        print(f"Loading LoRA weights from: {lora_path}")
+        lora_ckpt = torch.load(lora_path, map_location="cpu")
+        latent_diffusion.load_state_dict(lora_ckpt, strict=False)
+    else:
+        print("No LoRA file found — using base model only.")
 
     latent_diffusion.eval()
     latent_diffusion = latent_diffusion.cuda()

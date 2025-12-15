@@ -1,0 +1,6 @@
+name: audioldm
+channels:
+  - defaults
+dependencies:
+  - python=3.10
+prefix: /opt/miniconda3/envs/audioldm
